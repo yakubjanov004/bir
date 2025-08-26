@@ -63,7 +63,16 @@ CALL_CENTER_SUPERVISOR_ID = int(os.getenv('CALL_CENTER_SUPERVISOR_ID', 0)) if os
 CALL_CENTER_ID = int(os.getenv('CALL_CENTER_ID', 0)) if os.getenv('CALL_CENTER_ID') else None
 
 # Initialize bot and dispatcher
-bot = Bot(token=BOT_TOKEN)
+# Use a default token if not provided (for testing)
+if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+    BOT_TOKEN = "1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"  # Dummy token for testing
+
+try:
+    bot = Bot(token=BOT_TOKEN)
+except Exception as e:
+    print(f"Warning: Could not initialize bot: {e}")
+    bot = None
+
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
