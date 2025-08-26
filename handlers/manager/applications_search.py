@@ -154,7 +154,7 @@ def get_manager_applications_search_router():
     router.message.filter(role_filter)
     router.callback_query.filter(role_filter)
     
-    @router.message(F.text.in_(["🔎 Qidirish"]), flags={"block": False})
+    @router.message(F.text.in_(["🔎 Qidirish"]))
     async def show_search_menu(message: Message, state: FSMContext):
         """Show search menu using mock data"""
         try:
@@ -583,7 +583,7 @@ def get_manager_applications_search_router():
             await callback.answer("Xatolik yuz berdi", show_alert=True)
     
     # Additional mock handlers for backward compatibility
-    @router.message(F.text.in_(["🔍 Qidiruv", "🔍 Поиск"]), flags={"block": False})
+    @router.message(F.text.in_(["🔍 Qidiruv", "🔍 Поиск"]))
     async def view_search(message: Message, state: FSMContext):
         """Manager view search handler"""
         try:

@@ -253,7 +253,7 @@ def get_manager_export_router():
     router.message.filter(role_filter)
     router.callback_query.filter(role_filter)
 
-    @router.message(F.text.in_(["📤 Export", "📤 Экспорт"]), flags={"block": False})
+    @router.message(F.text.in_(["📤 Export", "📤 Экспорт"]))
     async def export_menu_handler(message: Message, state: FSMContext):
         """Export menu handler"""
         try:

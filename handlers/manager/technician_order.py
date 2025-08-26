@@ -197,7 +197,7 @@ def get_manager_technical_service_router():
     router.callback_query.filter(role_filter)
 
     # Entry point
-    @router.message(F.text == "🔧 Texnik xizmat yaratish", flags={"block": False})
+    @router.message(F.text == "🔧 Texnik xizmat yaratish")
     async def start_manager_service(message: Message, state: FSMContext):
         await state.update_data(current_flow='technical')
         await message.answer("Mijozni qanday qidiramiz?", reply_markup=get_manager_client_search_keyboard('uz'))

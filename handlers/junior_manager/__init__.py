@@ -38,7 +38,6 @@ def get_junior_manager_router():
 # Export for convenience
 __all__ = [
     'get_junior_manager_router',
-    'main_menu_router',
     'client_search_router', 
     'connection_order_router',
     'inbox_router',

@@ -112,20 +112,11 @@ def get_manager_applications_router():
     router.message.filter(role_filter)
     router.callback_query.filter(role_filter)
 
-    # Import and include all sub-routers
-    from handlers.manager.applications_list import get_manager_applications_list_router
-    from handlers.manager.applications_search import get_manager_applications_search_router
-    from handlers.manager.applications_actions import get_manager_applications_actions_router
-    from handlers.manager.applications_callbacks import get_manager_applications_callbacks_router
-    
-    # Include all sub-routers
-    router.include_router(get_manager_applications_list_router())
-    router.include_router(get_manager_applications_search_router())
-    router.include_router(get_manager_applications_actions_router())
-    router.include_router(get_manager_applications_callbacks_router())
+    # NOTE: Sub-routers are included in handlers/manager/__init__.py
+    # Do not include them here to avoid duplicate inclusion
     
     # Add main applications command handler
-    @router.message(F.text.in_(["📋 Arizalarni ko'rish", "📋 Все заявки"]), flags={"block": False})
+    @router.message(F.text.in_(["📋 Arizalarni ko'rish", "📋 Все заявки"]))
     async def show_applications_menu(message: Message, state: FSMContext):
         """Show applications main menu with statistics using mock data"""
         try:
@@ -195,7 +186,7 @@ Qaysi arizalarni ko'rmoqchisiz?"""
             await message.answer("❌ Xatolik yuz berdi")
     
     # Add quick stats command
-    @router.message(F.text.in_(["📊 Statistika", "📊 Статистика"]), flags={"block": False})
+    @router.message(F.text.in_(["📊 Statistika", "📊 Статистика"]))
     async def show_quick_stats(message: Message, state: FSMContext):
         """Show quick applications statistics using mock data"""
         try:
