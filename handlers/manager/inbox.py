@@ -143,7 +143,7 @@ def get_manager_inbox_router_min():
     router.message.filter(RoleFilter(["manager", "junior_manager"]))
     router.callback_query.filter(RoleFilter(["manager", "junior_manager"]))
 
-    @router.message(F.text.in_(["📥 Inbox", "Inbox"]), flags={"block": False})
+    @router.message(F.text.in_(["📥 Inbox", "Inbox"]))
     async def open_inbox(message: Message, state: FSMContext):
         user = await get_user_by_telegram_id(message.from_user.id)
         if not user or user.get("role") != "manager":

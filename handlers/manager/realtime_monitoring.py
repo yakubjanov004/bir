@@ -351,7 +351,7 @@ def get_manager_realtime_monitoring_router():
     router.message.filter(role_filter)
     router.callback_query.filter(role_filter)
 
-    @router.message(F.text.in_(["🕐 Real vaqtda kuzatish"]), flags={"block": False})
+    @router.message(F.text.in_(["🕐 Real vaqtda kuzatish"]))
     async def show_realtime_dashboard(message: Message, state: FSMContext):
         """Manager realtime monitoring handler"""
         try:

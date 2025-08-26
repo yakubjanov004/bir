@@ -258,7 +258,7 @@ def get_manager_filters_router():
     router.message.filter(role_filter)
     router.callback_query.filter(role_filter)
 
-    @router.message(F.text.in_(["🔍 Filtrlar", "🔍 Фильтрация"]), flags={"block": False})
+    @router.message(F.text.in_(["🔍 Filtrlar", "🔍 Фильтрация"]))
     async def view_filters(message: Message, state: FSMContext):
         """Manager view filters handler"""
         try:

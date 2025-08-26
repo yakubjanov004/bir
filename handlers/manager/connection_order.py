@@ -271,7 +271,7 @@ def get_manager_connection_order_router():
     router.callback_query.filter(role_filter)
 
     # 1) Entry: client search method
-    @router.message(F.text == "🔌 Ulanish arizasi yaratish", flags={"block": False})
+    @router.message(F.text == "🔌 Ulanish arizasi yaratish")
     async def start_connection_order(message: Message, state: FSMContext):
         await state.update_data(current_flow='connection')
         await message.answer(

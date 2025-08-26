@@ -238,7 +238,7 @@ def get_manager_staff_activity_router():
     router.message.filter(role_filter)
     router.callback_query.filter(role_filter)
 
-    @router.message(F.text == "👥 Xodimlar faoliyati", flags={"block": False})
+    @router.message(F.text == "👥 Xodimlar faoliyati")
     async def show_staff_activity_menu(message: Message, state: FSMContext):
         """Manager staff activity handler"""
         try:

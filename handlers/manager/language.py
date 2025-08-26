@@ -87,7 +87,7 @@ def get_manager_language_router():
     router.message.filter(role_filter)
     router.callback_query.filter(role_filter)
 
-    @router.message(F.text.in_(["🌐 Tilni o'zgartirish", "🌐 Изменить язык"]), flags={"block": False})
+    @router.message(F.text.in_(["🌐 Tilni o'zgartirish", "🌐 Изменить язык"]))
     async def change_manager_language(message: Message, state: FSMContext):
         """Manager language change handler"""
         try:

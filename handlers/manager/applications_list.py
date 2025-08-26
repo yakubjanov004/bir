@@ -149,7 +149,7 @@ def get_manager_applications_list_router():
     router.message.filter(role_filter)
     router.callback_query.filter(role_filter)
     
-    @router.message(F.text.in_(["📋 Arizalar ro'yxati"]), flags={"block": False})
+    @router.message(F.text.in_(["📋 Arizalar ro'yxati"]))
     async def show_applications_list(message: Message, state: FSMContext):
         """Show applications list using mock data"""
         try:
@@ -454,7 +454,7 @@ def get_manager_applications_list_router():
             await callback.answer("Xatolik yuz berdi", show_alert=True)
     
     # Additional mock handlers for backward compatibility
-    @router.message(F.text.in_(["📋 Hammasini ko'rish"]), flags={"block": False})
+    @router.message(F.text.in_(["📋 Hammasini ko'rish"]))
     async def view_all_applications(message: Message, state: FSMContext):
         """Manager view all applications handler"""
         try:

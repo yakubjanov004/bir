@@ -116,7 +116,7 @@ def get_manager_applications_router():
     # Do not include them here to avoid duplicate inclusion
     
     # Add main applications command handler
-    @router.message(F.text.in_(["📋 Arizalarni ko'rish", "📋 Все заявки"]), flags={"block": False})
+    @router.message(F.text.in_(["📋 Arizalarni ko'rish", "📋 Все заявки"]))
     async def show_applications_menu(message: Message, state: FSMContext):
         """Show applications main menu with statistics using mock data"""
         try:
@@ -186,7 +186,7 @@ Qaysi arizalarni ko'rmoqchisiz?"""
             await message.answer("❌ Xatolik yuz berdi")
     
     # Add quick stats command
-    @router.message(F.text.in_(["📊 Statistika", "📊 Статистика"]), flags={"block": False})
+    @router.message(F.text.in_(["📊 Statistika", "📊 Статистика"]))
     async def show_quick_stats(message: Message, state: FSMContext):
         """Show quick applications statistics using mock data"""
         try:

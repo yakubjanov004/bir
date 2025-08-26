@@ -201,7 +201,7 @@ def get_manager_status_management_router():
     router.message.filter(role_filter)
     router.callback_query.filter(role_filter)
     
-    @router.message(F.text.in_(["📊 Status boshqaruvi"]), flags={"block": False})
+    @router.message(F.text.in_(["📊 Status boshqaruvi"]))
     async def show_status_management(message: Message, state: FSMContext):
         """Show status management menu using mock data"""
         try:
