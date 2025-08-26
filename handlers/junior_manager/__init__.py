@@ -14,7 +14,7 @@ This module provides junior manager functionality including:
 from aiogram import Router
 
 # Import all handler routers
-from .client_search import router as client_search_router
+from .client_search import router as junior_manager_client_search
 from .connection_order import router as connection_order_router
 from .inbox import router as inbox_router
 from .language import router as language_router
@@ -28,7 +28,7 @@ def get_junior_manager_router():
     # Include all sub-routers in priority order
     router.include_router(inbox_router)
     router.include_router(orders_router)
-    router.include_router(client_search_router)
+    router.include_router(junior_manager_client_search)
     router.include_router(connection_order_router)
     router.include_router(statistics_router)
     router.include_router(language_router)
@@ -38,7 +38,7 @@ def get_junior_manager_router():
 # Export for convenience
 __all__ = [
     'get_junior_manager_router',
-    'client_search_router', 
+    'junior_manager_client_search', 
     'connection_order_router',
     'inbox_router',
     'language_router',
