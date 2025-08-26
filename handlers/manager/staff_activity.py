@@ -1,569 +1,876 @@
 """
-Manager Staff Activity Handler - Complete Implementation
-
-This module provides complete staff activity monitoring functionality for Manager role,
-allowing managers to view online staff, performance, workload, attendance, and junior manager work.
+Manager Staff Activity Module - Complete Inline Keyboard Implementation  
+Author: Telegram Bot Development Team
+Date: 2024
 """
 
-from aiogram import F, Router
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
-from datetime import datetime, date, timedelta
-from filters.role_filter import RoleFilter
+from aiogram.fsm.state import State, StatesGroup
+from typing import Optional, List, Dict, Any
+from datetime import datetime, timedelta
 import logging
-import json
-from typing import List, Dict, Any, Optional
-
-
-async def get_user_by_telegram_id(region: str, telegram_id: int) -> Optional[dict]:
-    """
-    Mock function to get user info by telegram_id for a given region.
-    In a real implementation, this would query the database.
-    """
-    # Example mock data for demonstration
-    mock_users = [
-        {
-            "id": 201,
-            "telegram_id": 123456789,
-            "role": "manager",
-            "region": "toshkent",
-            "full_name": "Manager 1",
-            "language": "uz"
-        },
-        {
-            "id": 202,
-            "telegram_id": 987654321,
-            "role": "junior_manager",
-            "region": "toshkent",
-            "full_name": "Junior Manager 1",
-            "language": "uz"
-        },
-        {
-            "id": 203,
-            "telegram_id": 555555555,
-            "role": "technician",
-            "region": "toshkent",
-            "full_name": "Technician 1",
-            "language": "uz"
-        }
-    ]
-    for user in mock_users:
-        if user["telegram_id"] == telegram_id and user["region"] == region:
-            return user
-    return None
+import random
 
 logger = logging.getLogger(__name__)
 
-# Calculate staff performance metrics
-async def calculate_staff_performance(region: str, staff_id: int, period_days: int = 7) -> Dict[str, Any]:
-    """Calculate performance metrics for a staff member"""
-    try:
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=period_days)
-        
-        # Get applications assigned to this staff
-        applications = await get_manager_applications(
-            region=region,
-            manager_id=staff_id,
-            limit=100,
-            offset=0
-        )
-        
-        # Calculate metrics
-        total_tasks = len(applications)
-        completed_tasks = sum(1 for app in applications if app.get('current_status') == 'completed')
-        in_progress = sum(1 for app in applications if app.get('current_status') in ['in_progress', 'assigned'])
-        cancelled = sum(1 for app in applications if app.get('current_status') == 'cancelled')
-        
-        # Calculate completion rate
-        success_rate = round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 1)
-        
-        # Calculate average completion time (in hours)
-        completion_times = []
-        for app in applications:
-            if app.get('current_status') == 'completed' and app.get('created_at') and app.get('updated_at'):
-                created = app['created_at']
-                updated = app['updated_at']
-                if isinstance(created, str):
-                    created = datetime.fromisoformat(created.replace('Z', '+00:00'))
-                if isinstance(updated, str):
-                    updated = datetime.fromisoformat(updated.replace('Z', '+00:00'))
-                hours = (updated - created).total_seconds() / 3600
-                completion_times.append(hours)
-        
-        avg_completion_hours = round(sum(completion_times) / len(completion_times), 1) if completion_times else 0
-        
-        # Group by task type
-        tasks_by_type = {}
-        for app in applications:
-            task_type = app.get('workflow_type', 'other')
-            tasks_by_type[task_type] = tasks_by_type.get(task_type, 0) + 1
-        
-        # Today's metrics
-        today = datetime.now().date()
-        completed_today = sum(1 for app in applications 
-                             if app.get('current_status') == 'completed' 
-                             and app.get('updated_at')
-                             and (datetime.fromisoformat(str(app['updated_at']).replace('Z', '+00:00')).date() == today if isinstance(app['updated_at'], str) else app['updated_at'].date() == today))
-        
-        return {
-            'total_tasks': total_tasks,
-            'completed_tasks': completed_tasks,
-            'in_progress': in_progress,
-            'cancelled': cancelled,
-            'success_rate': success_rate,
-            'avg_completion_hours': avg_completion_hours,
-            'tasks_by_type': tasks_by_type,
-            'completed_today': completed_today,
-            'period_days': period_days
+# ================== MOCK DATA ==================
+MOCK_STAFF_DATA = {
+    "technicians": [
+        {
+            "id": 1,
+            "name": "Ahmad Toshmatov",
+            "role": "Senior Texnik",
+            "status": "online",
+            "current_task": "APP-2024-001",
+            "location": "Toshkent, Chorsu",
+            "completed_today": 5,
+            "active_tasks": 3,
+            "rating": 4.8,
+            "phone": "+998901234567",
+            "last_seen": datetime.now() - timedelta(minutes=5)
+        },
+        {
+            "id": 2,
+            "name": "Jasur Rahimov",
+            "role": "Texnik",
+            "status": "busy",
+            "current_task": "APP-2024-002",
+            "location": "Toshkent, Yunusabad",
+            "completed_today": 3,
+            "active_tasks": 5,
+            "rating": 4.5,
+            "phone": "+998901234568",
+            "last_seen": datetime.now() - timedelta(minutes=15)
+        },
+        {
+            "id": 3,
+            "name": "Dilfuza Abdullayeva",
+            "role": "Texnik",
+            "status": "break",
+            "current_task": None,
+            "location": "Toshkent, Sergeli",
+            "completed_today": 4,
+            "active_tasks": 2,
+            "rating": 4.9,
+            "phone": "+998901234569",
+            "last_seen": datetime.now() - timedelta(minutes=30)
+        },
+        {
+            "id": 4,
+            "name": "Rustam Karimov",
+            "role": "Junior Texnik",
+            "status": "offline",
+            "current_task": None,
+            "location": "Toshkent, Mirzo Ulug'bek",
+            "completed_today": 2,
+            "active_tasks": 1,
+            "rating": 4.3,
+            "phone": "+998901234570",
+            "last_seen": datetime.now() - timedelta(hours=2)
         }
-        
-    except Exception as e:
-        logger.error(f"Error calculating staff performance: {e}")
-        return {
-            'total_tasks': 0,
-            'completed_tasks': 0,
-            'in_progress': 0,
-            'cancelled': 0,
-            'success_rate': 0,
-            'avg_completion_hours': 0,
-            'tasks_by_type': {},
-            'completed_today': 0,
-            'period_days': period_days
+    ],
+    "call_center": [
+        {
+            "id": 5,
+            "name": "Malika Karimova",
+            "role": "Call Center Operator",
+            "status": "online",
+            "calls_today": 45,
+            "active_call": True,
+            "avg_call_time": "3:45",
+            "rating": 4.7,
+            "phone": "+998901234571",
+            "last_seen": datetime.now()
+        },
+        {
+            "id": 6,
+            "name": "Dilnoza Saidova",
+            "role": "Senior Operator",
+            "status": "online",
+            "calls_today": 52,
+            "active_call": False,
+            "avg_call_time": "4:12",
+            "rating": 4.9,
+            "phone": "+998901234572",
+            "last_seen": datetime.now() - timedelta(minutes=2)
         }
-
-# Get online staff members
-async def get_online_staff(region: str) -> List[Dict[str, Any]]:
-    """Get currently online staff members"""
-    try:
-        online_staff = []
-        
-        # Get all staff by roles
-        for role in ['technician', 'controller', 'junior_manager', 'call_center']:
-            staff_members = await get_staff_by_role(region, role)
-            
-            for staff in staff_members:
-                # Check if online (last activity within 5 minutes)
-                if staff.get('last_activity'):
-                    last_activity = staff['last_activity']
-                    if isinstance(last_activity, str):
-                        last_activity = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
-                    
-                    if (datetime.now() - last_activity).total_seconds() < 300:  # 5 minutes
-                        staff['is_online'] = True
-                        staff['role_display'] = get_role_display(role)
-                        online_staff.append(staff)
-        
-        return online_staff
-        
-    except Exception as e:
-        logger.error(f"Error getting online staff: {e}")
-        return []
-
-# Get role display name
-def get_role_display(role: str) -> str:
-    """Get display name for role"""
-    role_map = {
-        'technician': '👨‍🔧 Texnik',
-        'controller': '👮 Nazoratchi',
-        'junior_manager': '👨‍💼 Kichik menejer',
-        'call_center': '☎️ Call Center',
-        'manager': '👨‍💼 Menejer',
-        'admin': '👨‍💻 Admin'
+    ],
+    "junior_managers": [
+        {
+            "id": 7,
+            "name": "Aziz Xolmatov",
+            "role": "Junior Manager",
+            "status": "online",
+            "tasks_assigned": 12,
+            "tasks_completed": 8,
+            "active_tasks": 4,
+            "rating": 4.6,
+            "phone": "+998901234573",
+            "last_seen": datetime.now() - timedelta(minutes=10)
+        },
+        {
+            "id": 8,
+            "name": "Shoxrux Rahimov",
+            "role": "Junior Manager",
+            "status": "busy",
+            "tasks_assigned": 15,
+            "tasks_completed": 10,
+            "active_tasks": 5,
+            "rating": 4.4,
+            "phone": "+998901234574",
+            "last_seen": datetime.now() - timedelta(minutes=20)
+        }
+    ],
+    "statistics": {
+        "total_staff": 25,
+        "online": 18,
+        "busy": 5,
+        "break": 2,
+        "offline": 4,
+        "technicians_total": 15,
+        "call_center_total": 6,
+        "junior_managers_total": 4,
+        "avg_rating": 4.6,
+        "tasks_today": 156,
+        "tasks_completed": 89,
+        "calls_today": 234,
+        "avg_response_time": "15 min"
     }
-    return role_map.get(role, role)
+}
 
-# Calculate workload distribution
-async def calculate_workload_distribution(region: str) -> Dict[str, Any]:
-    """Calculate workload distribution across staff"""
-    try:
-        workload = {}
-        
-        # Get all active applications
-        all_applications = await get_manager_applications(
-            region=region,
-            status_filter='in_progress',
-            limit=200,
-            offset=0
-        )
-        
-        # Group by assignee
-        for app in all_applications:
-            assignee_id = app.get('current_assignee_id')
-            if assignee_id:
-                if assignee_id not in workload:
-                    workload[assignee_id] = {
-                        'total': 0,
-                        'high_priority': 0,
-                        'medium_priority': 0,
-                        'low_priority': 0
-                    }
-                
-                workload[assignee_id]['total'] += 1
-                priority = app.get('priority', 'medium')
-                workload[assignee_id][f'{priority}_priority'] += 1
-        
-        # Get staff info for each assignee
-        result = []
-        for staff_id, load in workload.items():
-            staff_info = await get_user(region, staff_id)
-            if staff_info:
-                result.append({
-                    'staff_id': staff_id,
-                    'full_name': staff_info.get('full_name', 'Unknown'),
-                    'role': staff_info.get('role', 'unknown'),
-                    'workload': load
-                })
-        
-        # Sort by total workload
-        result.sort(key=lambda x: x['workload']['total'], reverse=True)
-        
-        return {
-            'distribution': result,
-            'total_active': sum(w['workload']['total'] for w in result),
-            'staff_count': len(result)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error calculating workload distribution: {e}")
-        return {'distribution': [], 'total_active': 0, 'staff_count': 0}
+# ================== STATES ==================
+class StaffActivityStates(StatesGroup):
+    menu = State()
+    viewing_list = State()
+    viewing_detail = State()
+    viewing_performance = State()
+    viewing_statistics = State()
 
+# ================== KEYBOARDS ==================
+def get_staff_menu_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    """Get staff activity menu keyboard"""
+    stats = MOCK_STAFF_DATA["statistics"]
+    
+    if lang == "uz":
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    text=f"👥 Barcha xodimlar ({stats['total_staff']})",
+                    callback_data="staff:all"
+                ),
+                InlineKeyboardButton(
+                    text=f"🟢 Online ({stats['online']})",
+                    callback_data="staff:online"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"👨‍🔧 Texniklar ({stats['technicians_total']})",
+                    callback_data="staff:technicians"
+                ),
+                InlineKeyboardButton(
+                    text=f"📞 Call center ({stats['call_center_total']})",
+                    callback_data="staff:call_center"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"👨‍💼 Junior menejerlar ({stats['junior_managers_total']})",
+                    callback_data="staff:junior_managers"
+                ),
+                InlineKeyboardButton(
+                    text="📊 Statistika",
+                    callback_data="staff:statistics"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📈 Performance",
+                    callback_data="staff:performance"
+                ),
+                InlineKeyboardButton(
+                    text="📋 Hisobotlar",
+                    callback_data="staff:reports"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Orqaga",
+                    callback_data="manager:back_to_menu"
+                )
+            ]
+        ]
+    else:  # ru
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    text=f"👥 Все сотрудники ({stats['total_staff']})",
+                    callback_data="staff:all"
+                ),
+                InlineKeyboardButton(
+                    text=f"🟢 Онлайн ({stats['online']})",
+                    callback_data="staff:online"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"👨‍🔧 Техники ({stats['technicians_total']})",
+                    callback_data="staff:technicians"
+                ),
+                InlineKeyboardButton(
+                    text=f"📞 Колл-центр ({stats['call_center_total']})",
+                    callback_data="staff:call_center"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"👨‍💼 Младшие менеджеры ({stats['junior_managers_total']})",
+                    callback_data="staff:junior_managers"
+                ),
+                InlineKeyboardButton(
+                    text="📊 Статистика",
+                    callback_data="staff:statistics"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📈 Производительность",
+                    callback_data="staff:performance"
+                ),
+                InlineKeyboardButton(
+                    text="📋 Отчеты",
+                    callback_data="staff:reports"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Назад",
+                    callback_data="manager:back_to_menu"
+                )
+            ]
+        ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-def get_manager_staff_activity_router():
-    """Get router for manager staff activity handlers"""
+def get_staff_detail_keyboard(staff_id: int, lang: str = "uz") -> InlineKeyboardMarkup:
+    """Get staff detail keyboard"""
+    
+    if lang == "uz":
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    text="📱 Bog'lanish",
+                    callback_data=f"staff:contact:{staff_id}"
+                ),
+                InlineKeyboardButton(
+                    text="📊 Performance",
+                    callback_data=f"staff:perf:{staff_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📋 Vazifalar",
+                    callback_data=f"staff:tasks:{staff_id}"
+                ),
+                InlineKeyboardButton(
+                    text="📈 Statistika",
+                    callback_data=f"staff:stats:{staff_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📝 Izoh qo'shish",
+                    callback_data=f"staff:note:{staff_id}"
+                ),
+                InlineKeyboardButton(
+                    text="⚠️ Ogohlantirish",
+                    callback_data=f"staff:warn:{staff_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Orqaga",
+                    callback_data="staff:back_to_list"
+                )
+            ]
+        ]
+    else:  # ru
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    text="📱 Связаться",
+                    callback_data=f"staff:contact:{staff_id}"
+                ),
+                InlineKeyboardButton(
+                    text="📊 Производительность",
+                    callback_data=f"staff:perf:{staff_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📋 Задачи",
+                    callback_data=f"staff:tasks:{staff_id}"
+                ),
+                InlineKeyboardButton(
+                    text="📈 Статистика",
+                    callback_data=f"staff:stats:{staff_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📝 Добавить заметку",
+                    callback_data=f"staff:note:{staff_id}"
+                ),
+                InlineKeyboardButton(
+                    text="⚠️ Предупреждение",
+                    callback_data=f"staff:warn:{staff_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Назад",
+                    callback_data="staff:back_to_list"
+                )
+            ]
+        ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def get_status_emoji(status: str) -> str:
+    """Get status emoji"""
+    return {
+        "online": "🟢",
+        "busy": "🔴",
+        "break": "🟡",
+        "offline": "⚫"
+    }.get(status, "⚪")
+
+def format_last_seen(last_seen: datetime, lang: str = "uz") -> str:
+    """Format last seen time"""
+    now = datetime.now()
+    diff = now - last_seen
+    
+    if lang == "uz":
+        if diff.seconds < 60:
+            return "Hozirgina"
+        elif diff.seconds < 3600:
+            return f"{diff.seconds // 60} daqiqa oldin"
+        elif diff.seconds < 86400:
+            return f"{diff.seconds // 3600} soat oldin"
+        else:
+            return f"{diff.days} kun oldin"
+    else:
+        if diff.seconds < 60:
+            return "Только что"
+        elif diff.seconds < 3600:
+            return f"{diff.seconds // 60} минут назад"
+        elif diff.seconds < 86400:
+            return f"{diff.seconds // 3600} часов назад"
+        else:
+            return f"{diff.days} дней назад"
+
+# ================== HANDLERS ==================
+async def show_staff_menu(callback: CallbackQuery, state: FSMContext):
+    """Show staff activity menu"""
+    
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    stats = MOCK_STAFF_DATA["statistics"]
+    
+    if lang == "uz":
+        text = f"""
+👥 <b>XODIMLAR FAOLIYATI</b>
+
+📊 <b>Umumiy statistika:</b>
+├ 👥 Jami xodimlar: {stats['total_staff']}
+├ 🟢 Online: {stats['online']}
+├ 🔴 Band: {stats['busy']}
+├ 🟡 Tanaffus: {stats['break']}
+└ ⚫ Offline: {stats['offline']}
+
+📈 <b>Bugungi ko'rsatkichlar:</b>
+├ 📋 Vazifalar: {stats['tasks_today']}
+├ ✅ Bajarilgan: {stats['tasks_completed']}
+├ 📞 Qo'ng'iroqlar: {stats['calls_today']}
+├ ⏱️ O'rtacha javob: {stats['avg_response_time']}
+└ ⭐ O'rtacha reyting: {stats['avg_rating']}
+
+<b>Qaysi xodimlarni ko'rmoqchisiz?</b>
+        """
+    else:
+        text = f"""
+👥 <b>АКТИВНОСТЬ СОТРУДНИКОВ</b>
+
+📊 <b>Общая статистика:</b>
+├ 👥 Всего сотрудников: {stats['total_staff']}
+├ 🟢 Онлайн: {stats['online']}
+├ 🔴 Заняты: {stats['busy']}
+├ 🟡 Перерыв: {stats['break']}
+└ ⚫ Оффлайн: {stats['offline']}
+
+📈 <b>Сегодняшние показатели:</b>
+├ 📋 Задачи: {stats['tasks_today']}
+├ ✅ Выполнено: {stats['tasks_completed']}
+├ 📞 Звонки: {stats['calls_today']}
+├ ⏱️ Среднее время ответа: {stats['avg_response_time']}
+└ ⭐ Средний рейтинг: {stats['avg_rating']}
+
+<b>Каких сотрудников показать?</b>
+        """
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_staff_menu_keyboard(lang),
+        parse_mode="HTML"
+    )
+    
+    await state.set_state(StaffActivityStates.menu)
+
+def get_manager_staff_activity_router() -> Router:
+    """Get complete staff activity router with inline keyboards"""
     router = Router()
     
-    # Apply role filter
-    role_filter = RoleFilter("manager")
-    router.message.filter(role_filter)
-    router.callback_query.filter(role_filter)
-
-    @router.message(F.text == "👥 Xodimlar faoliyati")
-    async def show_staff_activity_menu(message: Message, state: FSMContext):
-        """Manager staff activity handler"""
-        try:
-            # Get user data from state
-            state_data = await state.get_data()
-            region = state_data.get('region', 'toshkent')
-            
-            # Get manager info
-            manager = await get_user_by_telegram_id(region, message.from_user.id)
-            if not manager:
-                await message.answer("❌ Manager topilmadi")
-                return
-            
-            # Get online staff count
-            online_staff = await get_online_staff(region)
-            online_count = len(online_staff)
-            
-            # Get workload summary
-            workload = await calculate_workload_distribution(region)
-            
-            activity_text = (
-                f"👥 <b>Xodimlar faoliyati</b>\n\n"
-                f"🟢 Online xodimlar: {online_count} ta\n"
-                f"📋 Aktiv vazifalar: {workload['total_active']} ta\n"
-                f"👷 Ishlayotgan xodimlar: {workload['staff_count']} ta\n\n"
-                f"Quyidagi bo'limlardan birini tanlang:"
-            )
-            
-            keyboard = _create_staff_activity_keyboard()
-            await message.answer(activity_text, reply_markup=keyboard, parse_mode='HTML')
-            
-            # Save region to state for callbacks
-            await state.update_data(region=region, manager_id=manager.get('id'))
-            
-            # Log action
-            await audit_logger.log_manager_action(
-                manager_id=manager.get('id'),
-                action='view_staff_activity',
-                details={'online_count': online_count, 'active_tasks': workload['total_active']}
-            )
-            
-        except Exception as e:
-            logger.error(f"Error showing staff activity menu: {e}")
-            await message.answer("❌ Xatolik yuz berdi")
-
-    # Inline callbacks for staff activity sections
-    @router.callback_query(F.data == "staff_performance")
-    async def cb_staff_performance(callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
-        await show_staff_performance(callback.message, state)
-
-    @router.callback_query(F.data == "staff_workload")
-    async def cb_staff_workload(callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
-        await show_staff_workload(callback.message, state)
-
-    @router.callback_query(F.data == "staff_user_detail")
-    async def cb_staff_user_detail(callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
-        await state.update_data(staff_user_index=0)
-        await show_staff_user_detail(callback, state)
-
-    @router.callback_query(F.data == "staff_user_prev")
-    async def cb_staff_user_prev(callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
+    @router.callback_query(F.data.startswith("staff:"))
+    async def handle_staff_callbacks(callback: CallbackQuery, state: FSMContext):
+        """Handle all staff callbacks"""
+        
         data = await state.get_data()
-        idx = max(0, int(data.get('staff_user_index', 0)) - 1)
-        await state.update_data(staff_user_index=idx)
-        await show_staff_user_detail(callback, state)
-
-    @router.callback_query(F.data == "staff_user_next")
-    async def cb_staff_user_next(callback: CallbackQuery, state: FSMContext):
+        lang = data.get("language", "uz")
+        action_parts = callback.data.split(":")
+        action = action_parts[1]
+        
+        if action == "all":
+            await show_all_staff(callback, state)
+        elif action == "online":
+            await show_online_staff(callback, state)
+        elif action == "technicians":
+            await show_technicians(callback, state)
+        elif action == "call_center":
+            await show_call_center(callback, state)
+        elif action == "junior_managers":
+            await show_junior_managers(callback, state)
+        elif action == "statistics":
+            await show_statistics(callback, state)
+        elif action == "performance":
+            await show_performance(callback, state)
+        elif action == "reports":
+            await show_reports(callback, state)
+        elif action == "back_to_list":
+            await show_staff_menu(callback, state)
+        elif action == "view":
+            staff_id = int(action_parts[2])
+            await show_staff_detail(callback, state, staff_id)
+        elif action == "contact":
+            staff_id = int(action_parts[2])
+            await contact_staff(callback, state, staff_id)
+        elif action == "perf":
+            staff_id = int(action_parts[2])
+            await show_staff_performance(callback, state, staff_id)
+        elif action == "tasks":
+            staff_id = int(action_parts[2])
+            await show_staff_tasks(callback, state, staff_id)
+        elif action == "stats":
+            staff_id = int(action_parts[2])
+            await show_staff_stats(callback, state, staff_id)
+        elif action == "note":
+            staff_id = int(action_parts[2])
+            await add_note(callback, state, staff_id)
+        elif action == "warn":
+            staff_id = int(action_parts[2])
+            await warn_staff(callback, state, staff_id)
+        
         await callback.answer()
+    
+    async def show_technicians(callback: CallbackQuery, state: FSMContext):
+        """Show technicians list"""
+        
         data = await state.get_data()
-        idx = int(data.get('staff_user_index', 0)) + 1
-        await state.update_data(staff_user_index=idx)
-        await show_staff_user_detail(callback, state)
-
-    @router.callback_query(F.data == "staff_back")
-    async def cb_staff_back(callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
-        from keyboards.manager_buttons import get_manager_main_keyboard
-        await callback.message.edit_text("Asosiy menyu:")
-        await callback.message.answer("Asosiy menyu:", reply_markup=get_manager_main_keyboard())
-
-    async def show_staff_performance(message, state: FSMContext):
-        """Show staff performance statistics"""
-        try:
-            # Get region from state
-            state_data = await state.get_data()
-            region = state_data.get('region', 'toshkent')
+        lang = data.get("language", "uz")
+        technicians = MOCK_STAFF_DATA["technicians"]
+        
+        if lang == "uz":
+            text = "👨‍🔧 <b>TEXNIKLAR RO'YXATI</b>\n\n"
             
-            # Get all staff members
-            performance_data = []
+            for tech in technicians:
+                text += f"""
+{get_status_emoji(tech['status'])} <b>{tech['name']}</b>
+├ 📍 {tech['location']}
+├ 📋 Faol: {tech['active_tasks']} | Bajarilgan: {tech['completed_today']}
+├ ⭐ Reyting: {tech['rating']}
+└ 👁️ {format_last_seen(tech['last_seen'], lang)}
+                """
+        else:
+            text = "👨‍🔧 <b>СПИСОК ТЕХНИКОВ</b>\n\n"
             
-            for role in ['technician', 'controller', 'junior_manager', 'call_center']:
-                staff_members = await get_staff_by_role(region, role)
-                
-                for staff in staff_members[:3]:  # Limit to top 3 per role
-                    # Calculate performance for each staff
-                    perf = await calculate_staff_performance(region, staff.get('id'), period_days=7)
-                    
-                    performance_data.append({
-                        'full_name': staff.get('full_name', 'Unknown'),
-                        'role': get_role_display(role),
-                        'completed_tasks': perf['completed_tasks'],
-                        'total_tasks': perf['total_tasks'],
-                        'success_rate': perf['success_rate'],
-                        'avg_hours': perf['avg_completion_hours']
-                    })
-            
-            # Sort by success rate
-            performance_data.sort(key=lambda x: x['success_rate'], reverse=True)
-            
-            text = "📊 <b>Xodimlar samaradorligi (7 kunlik)</b>\n\n"
-            
-            for i, s in enumerate(performance_data[:10], 1):  # Show top 10
-                emoji = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "👤"
-                text += (
-                    f"{emoji} <b>{s['full_name']}</b> ({s['role']})\n"
-                    f"   ✅ Bajarilgan: {s['completed_tasks']}/{s['total_tasks']} "
-                    f"({s['success_rate']}%)\n"
-                    f"   ⏱️ O'rtacha: {s['avg_hours']} soat\n\n"
+            for tech in technicians:
+                text += f"""
+{get_status_emoji(tech['status'])} <b>{tech['name']}</b>
+├ 📍 {tech['location']}
+├ 📋 Активных: {tech['active_tasks']} | Выполнено: {tech['completed_today']}
+├ ⭐ Рейтинг: {tech['rating']}
+└ 👁️ {format_last_seen(tech['last_seen'], lang)}
+                """
+        
+        # Create inline buttons for each technician
+        buttons = []
+        for tech in technicians:
+            buttons.append([
+                InlineKeyboardButton(
+                    text=f"{get_status_emoji(tech['status'])} {tech['name']} ({tech['active_tasks']} vazifa)",
+                    callback_data=f"staff:view:{tech['id']}"
                 )
-            
-            if not performance_data:
-                text += "📭 Ma'lumot topilmadi"
-            
-            await message.answer(text, parse_mode='HTML')
-            
-            # Log action
-            await audit_logger.log_manager_action(
-                manager_id=state_data.get('manager_id'),
-                action='view_staff_performance',
-                details={'staff_count': len(performance_data)}
-            )
-            
-        except Exception as e:
-            logger.error(f"Error showing staff performance: {e}")
-            await message.answer("❌ Xatolik yuz berdi")
-
-    async def show_staff_workload(message, state: FSMContext):
-        """Show staff workload statistics"""
-        try:
-            # Get region from state
-            state_data = await state.get_data()
-            region = state_data.get('region', 'toshkent')
-            
-            # Get workload distribution
-            workload_data = await calculate_workload_distribution(region)
-            
-            text = "📋 <b>Xodimlar ish yuki</b>\n\n"
-            
-            if workload_data['distribution']:
-                # Group by priority
-                high_load = [s for s in workload_data['distribution'] if s['workload']['total'] >= 10]
-                medium_load = [s for s in workload_data['distribution'] if 5 <= s['workload']['total'] < 10]
-                low_load = [s for s in workload_data['distribution'] if s['workload']['total'] < 5]
-                
-                if high_load:
-                    text += "🔴 <b>Yuqori yuklanish:</b>\n"
-                    for s in high_load[:5]:
-                        text += (
-                            f"👤 {s['full_name']} ({get_role_display(s['role'])})\n"
-                            f"   📋 Jami: {s['workload']['total']} ta\n"
-                            f"   🔥 Yuqori: {s['workload']['high_priority']}, "
-                            f"⚡ O'rta: {s['workload']['medium_priority']}, "
-                            f"💤 Past: {s['workload']['low_priority']}\n\n"
-                        )
-                
-                if medium_load:
-                    text += "🟡 <b>O'rtacha yuklanish:</b>\n"
-                    for s in medium_load[:5]:
-                        text += (
-                            f"👤 {s['full_name']}: {s['workload']['total']} ta vazifa\n"
-                        )
-                    text += "\n"
-                
-                if low_load:
-                    text += "🟢 <b>Past yuklanish:</b>\n"
-                    for s in low_load[:5]:
-                        text += (
-                            f"👤 {s['full_name']}: {s['workload']['total']} ta vazifa\n"
-                        )
-                
-                text += (
-                    f"\n📊 <b>Umumiy statistika:</b>\n"
-                    f"├ Jami aktiv vazifalar: {workload_data['total_active']} ta\n"
-                    f"├ Ishlayotgan xodimlar: {workload_data['staff_count']} ta\n"
-                    f"└ O'rtacha yuklanish: {round(workload_data['total_active'] / workload_data['staff_count'], 1) if workload_data['staff_count'] > 0 else 0} ta\n"
-                )
-            else:
-                text += "📭 Hozircha aktiv vazifalar yo'q"
-            
-            await message.answer(text, parse_mode='HTML')
-            
-            # Log action
-            await audit_logger.log_manager_action(
-                manager_id=state_data.get('manager_id'),
-                action='view_staff_workload',
-                details={'total_active': workload_data['total_active'], 'staff_count': workload_data['staff_count']}
-            )
-            
-        except Exception as e:
-            logger.error(f"Error showing staff workload: {e}")
-            await message.answer("❌ Xatolik yuz berdi")
-
-    async def show_staff_user_detail(message_or_callback, state: FSMContext):
-        """Per-employee detailed card with navigation"""
-        try:
-            # Get region from state
-            state_data = await state.get_data()
-            region = state_data.get('region', 'toshkent')
-            
-            # Get all staff members
-            staff_list = []
-            for role in ['technician', 'controller', 'junior_manager', 'call_center']:
-                staff_members = await get_staff_by_role(region, role)
-                
-                for staff in staff_members[:5]:  # Limit per role
-                    # Calculate detailed performance
-                    perf_7days = await calculate_staff_performance(region, staff.get('id'), period_days=7)
-                    perf_1day = await calculate_staff_performance(region, staff.get('id'), period_days=1)
-                    
-                    staff_detail = {
-                        'id': staff.get('id'),
-                        'full_name': staff.get('full_name', 'Unknown'),
-                        'role': role,
-                        'phone': staff.get('phone', 'N/A'),
-                        'completed_today': perf_1day['completed_today'],
-                        'in_progress': perf_7days['in_progress'],
-                        'cancelled': perf_7days['cancelled'],
-                        'success_rate': perf_7days['success_rate'],
-                        'avg_completion_hours': perf_7days['avg_completion_hours'],
-                        'tasks_by_type': perf_7days['tasks_by_type'],
-                        'last_7_days_completed': perf_7days['completed_tasks'],
-                        'last_7_days_total': perf_7days['total_tasks'],
-                        'is_online': False
-                    }
-                    
-                    # Check if online
-                    if staff.get('last_activity'):
-                        last_activity = staff['last_activity']
-                        if isinstance(last_activity, str):
-                            last_activity = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
-                        
-                        if (datetime.now() - last_activity).total_seconds() < 300:  # 5 minutes
-                            staff_detail['is_online'] = True
-                    
-                    staff_list.append(staff_detail)
-            
-            if not staff_list:
-                await message_or_callback.answer("📭 Xodimlar topilmadi")
-                return
-            idx = max(0, min(int(state_data.get('staff_user_index', 0)), len(staff_list) - 1))
-            s = staff_list[idx]
-            
-            # Format task types
-            by_type_lines = "\n".join([f"   • {k}: {v} ta" for k, v in s['tasks_by_type'].items()]) if s['tasks_by_type'] else "   • Ma'lumot yo'q"
-            
-            # Online status
-            online_status = "🟢 Online" if s.get('is_online') else "⚫ Offline"
-            
-            text = (
-                f"👤 <b>{s['full_name']}</b> — {get_role_display(s['role'])} {online_status}\n"
-                f"📱 Telefon: {s.get('phone', 'N/A')}\n\n"
-                f"📊 <b>Bugungi faoliyat:</b>\n"
-                f"├ ✅ Bajarilgan: {s['completed_today']} ta\n"
-                f"├ ⏳ Jarayonda: {s['in_progress']} ta\n"
-                f"└ ❌ Bekor qilingan: {s['cancelled']} ta\n\n"
-                f"📈 <b>Samaradorlik ko'rsatkichlari:</b>\n"
-                f"├ Muvaffaqiyat darajasi: {s['success_rate']}%\n"
-                f"├ O'rtacha bajarish vaqti: {s['avg_completion_hours']} soat\n"
-                f"└ Umumiy samaradorlik: {'Yuqori' if s['success_rate'] >= 90 else 'O\'rta' if s['success_rate'] >= 70 else 'Past'}\n\n"
-                f"🗂 <b>Ish turlari bo'yicha taqsimot:</b>\n{by_type_lines}\n\n"
-                f"📅 <b>Haftalik statistika:</b>\n"
-                f"├ Bajarilgan: {s['last_7_days_completed']} ta\n"
-                f"├ Jami vazifalar: {s['last_7_days_total']} ta\n"
-                f"└ O'rtacha vaqt: {s['avg_completion_hours']} soat\n\n"
-                f"📊 <b>Xodim #{idx+1}/{len(staff_list)}</b>"
-            )
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [
-                    InlineKeyboardButton(text='⬅️ Oldingi', callback_data='staff_user_prev') if idx > 0 else InlineKeyboardButton(text=f'{idx+1}/{len(staff_list)}', callback_data='noop'),
-                    InlineKeyboardButton(text='Keyingi ➡️', callback_data='staff_user_next') if idx < len(staff_list)-1 else InlineKeyboardButton(text=f'{idx+1}/{len(staff_list)}', callback_data='noop')
-                ],
-                [InlineKeyboardButton(text='⬅️ Orqaga', callback_data='staff_back')]
             ])
-            
-            if isinstance(message_or_callback, CallbackQuery):
-                try:
-                    await message_or_callback.message.edit_text(text, reply_markup=kb, parse_mode='HTML')
-                except Exception:
-                    await message_or_callback.message.answer(text, reply_markup=kb, parse_mode='HTML')
-            else:
-                await message_or_callback.answer(text, reply_markup=kb, parse_mode='HTML')
-            
-            # Log action
-            await audit_logger.log_manager_action(
-                manager_id=state_data.get('manager_id'),
-                action='view_staff_detail',
-                details={'staff_id': s.get('id'), 'staff_name': s['full_name']}
+        
+        buttons.append([
+            InlineKeyboardButton(
+                text="⬅️ Orqaga" if lang == "uz" else "⬅️ Назад",
+                callback_data="staff:back_to_list"
             )
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        
+        await state.set_state(StaffActivityStates.viewing_list)
+    
+    async def show_call_center(callback: CallbackQuery, state: FSMContext):
+        """Show call center staff"""
+        
+        data = await state.get_data()
+        lang = data.get("language", "uz")
+        operators = MOCK_STAFF_DATA["call_center"]
+        
+        if lang == "uz":
+            text = "📞 <b>CALL CENTER XODIMLARI</b>\n\n"
             
-        except Exception as e:
-            logger.error(f"Error showing staff detail: {e}")
-            if isinstance(message_or_callback, CallbackQuery):
-                await message_or_callback.answer("❌ Xatolik yuz berdi", show_alert=True)
+            for op in operators:
+                text += f"""
+{get_status_emoji(op['status'])} <b>{op['name']}</b>
+├ 💼 {op['role']}
+├ 📞 Bugun: {op['calls_today']} qo'ng'iroq
+├ ⏱️ O'rtacha: {op['avg_call_time']}
+├ ⭐ Reyting: {op['rating']}
+└ 📱 {'Faol qo'ng'iroqda' if op['active_call'] else 'Tayyor'}
+                """
+        else:
+            text = "📞 <b>СОТРУДНИКИ КОЛЛ-ЦЕНТРА</b>\n\n"
+            
+            for op in operators:
+                text += f"""
+{get_status_emoji(op['status'])} <b>{op['name']}</b>
+├ 💼 {op['role']}
+├ 📞 Сегодня: {op['calls_today']} звонков
+├ ⏱️ Среднее: {op['avg_call_time']}
+├ ⭐ Рейтинг: {op['rating']}
+└ 📱 {'На звонке' if op['active_call'] else 'Готов'}
+                """
+        
+        # Create inline buttons
+        buttons = []
+        for op in operators:
+            buttons.append([
+                InlineKeyboardButton(
+                    text=f"{get_status_emoji(op['status'])} {op['name']} ({op['calls_today']} qo'ng'iroq)",
+                    callback_data=f"staff:view:{op['id']}"
+                )
+            ])
+        
+        buttons.append([
+            InlineKeyboardButton(
+                text="⬅️ Orqaga" if lang == "uz" else "⬅️ Назад",
+                callback_data="staff:back_to_list"
+            )
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    
+    async def show_junior_managers(callback: CallbackQuery, state: FSMContext):
+        """Show junior managers list"""
+        
+        data = await state.get_data()
+        lang = data.get("language", "uz")
+        junior_managers = MOCK_STAFF_DATA["junior_managers"]
+        
+        if lang == "uz":
+            text = "👨‍💼 <b>KICHIK MENEJERLAR</b>\n\n"
+            
+            for jm in junior_managers:
+                text += f"""
+{get_status_emoji(jm['status'])} <b>{jm['name']}</b>
+├ 📋 Tayinlangan: {jm['tasks_assigned']}
+├ ✅ Bajarilgan: {jm['tasks_completed']}
+├ 🔄 Faol: {jm['active_tasks']}
+├ ⭐ Reyting: {jm['rating']}
+└ 👁️ {format_last_seen(jm['last_seen'], lang)}
+                """
+        else:
+            text = "👨‍💼 <b>МЛАДШИЕ МЕНЕДЖЕРЫ</b>\n\n"
+            
+            for jm in junior_managers:
+                text += f"""
+{get_status_emoji(jm['status'])} <b>{jm['name']}</b>
+├ 📋 Назначено: {jm['tasks_assigned']}
+├ ✅ Выполнено: {jm['tasks_completed']}
+├ 🔄 Активных: {jm['active_tasks']}
+├ ⭐ Рейтинг: {jm['rating']}
+└ 👁️ {format_last_seen(jm['last_seen'], lang)}
+                """
+        
+        # Create inline buttons
+        buttons = []
+        for jm in junior_managers:
+            buttons.append([
+                InlineKeyboardButton(
+                    text=f"{get_status_emoji(jm['status'])} {jm['name']} ({jm['active_tasks']} faol)",
+                    callback_data=f"staff:view:{jm['id']}"
+                )
+            ])
+        
+        buttons.append([
+            InlineKeyboardButton(
+                text="⬅️ Orqaga" if lang == "uz" else "⬅️ Назад",
+                callback_data="staff:back_to_list"
+            )
+        ])
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    
+    async def show_staff_detail(callback: CallbackQuery, state: FSMContext, staff_id: int):
+        """Show staff member details"""
+        
+        data = await state.get_data()
+        lang = data.get("language", "uz")
+        
+        # Find staff member
+        staff = None
+        for tech in MOCK_STAFF_DATA["technicians"]:
+            if tech["id"] == staff_id:
+                staff = tech
+                break
+        
+        if not staff:
+            for op in MOCK_STAFF_DATA["call_center"]:
+                if op["id"] == staff_id:
+                    staff = op
+                    break
+        
+        if not staff:
+            for jm in MOCK_STAFF_DATA["junior_managers"]:
+                if jm["id"] == staff_id:
+                    staff = jm
+                    break
+        
+        if not staff:
+            await callback.answer("Xodim topilmadi!" if lang == "uz" else "Сотрудник не найден!")
+            return
+        
+        if lang == "uz":
+            text = f"""
+👤 <b>XODIM TAFSILOTLARI</b>
+
+👤 <b>Ism:</b> {staff['name']}
+💼 <b>Lavozim:</b> {staff['role']}
+📱 <b>Telefon:</b> {staff['phone']}
+{get_status_emoji(staff['status'])} <b>Status:</b> {staff['status']}
+⭐ <b>Reyting:</b> {staff['rating']}
+👁️ <b>Oxirgi faollik:</b> {format_last_seen(staff['last_seen'], lang)}
+
+📊 <b>Bugungi ko'rsatkichlar:</b>
+"""
+            
+            if 'completed_today' in staff:
+                text += f"""├ ✅ Bajarilgan: {staff['completed_today']}
+├ 🔄 Faol vazifalar: {staff['active_tasks']}
+├ 📍 Joylashuv: {staff.get('location', 'Noma\'lum')}
+└ 📋 Joriy vazifa: {staff.get('current_task', 'Yo\'q')}"""
+            elif 'calls_today' in staff:
+                text += f"""├ 📞 Qo'ng'iroqlar: {staff['calls_today']}
+├ ⏱️ O'rtacha vaqt: {staff['avg_call_time']}
+└ 📱 Status: {'Faol qo'ng'iroqda' if staff.get('active_call') else 'Tayyor'}"""
             else:
-                await message_or_callback.answer("❌ Xatolik yuz berdi")
+                text += f"""├ 📋 Tayinlangan: {staff['tasks_assigned']}
+├ ✅ Bajarilgan: {staff['tasks_completed']}
+└ 🔄 Faol: {staff['active_tasks']}"""
+        else:
+            text = f"""
+👤 <b>ДЕТАЛИ СОТРУДНИКА</b>
 
+👤 <b>Имя:</b> {staff['name']}
+💼 <b>Должность:</b> {staff['role']}
+📱 <b>Телефон:</b> {staff['phone']}
+{get_status_emoji(staff['status'])} <b>Статус:</b> {staff['status']}
+⭐ <b>Рейтинг:</b> {staff['rating']}
+👁️ <b>Последняя активность:</b> {format_last_seen(staff['last_seen'], lang)}
+
+📊 <b>Сегодняшние показатели:</b>
+"""
+            
+            if 'completed_today' in staff:
+                text += f"""├ ✅ Выполнено: {staff['completed_today']}
+├ 🔄 Активные задачи: {staff['active_tasks']}
+├ 📍 Местоположение: {staff.get('location', 'Неизвестно')}
+└ 📋 Текущая задача: {staff.get('current_task', 'Нет')}"""
+            elif 'calls_today' in staff:
+                text += f"""├ 📞 Звонки: {staff['calls_today']}
+├ ⏱️ Среднее время: {staff['avg_call_time']}
+└ 📱 Статус: {'На звонке' if staff.get('active_call') else 'Готов'}"""
+            else:
+                text += f"""├ 📋 Назначено: {staff['tasks_assigned']}
+├ ✅ Выполнено: {staff['tasks_completed']}
+└ 🔄 Активных: {staff['active_tasks']}"""
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_staff_detail_keyboard(staff_id, lang),
+            parse_mode="HTML"
+        )
+        
+        await state.set_state(StaffActivityStates.viewing_detail)
+    
+    async def show_statistics(callback: CallbackQuery, state: FSMContext):
+        """Show staff statistics"""
+        
+        data = await state.get_data()
+        lang = data.get("language", "uz")
+        stats = MOCK_STAFF_DATA["statistics"]
+        
+        # Calculate additional stats
+        efficiency = (stats['tasks_completed'] * 100) // stats['tasks_today'] if stats['tasks_today'] > 0 else 0
+        online_percent = (stats['online'] * 100) // stats['total_staff'] if stats['total_staff'] > 0 else 0
+        
+        if lang == "uz":
+            text = f"""
+📊 <b>XODIMLAR STATISTIKASI</b>
+
+👥 <b>Xodimlar taqsimoti:</b>
+├ 👨‍🔧 Texniklar: {stats['technicians_total']}
+├ 📞 Call center: {stats['call_center_total']}
+└ 👨‍💼 Junior menejerlar: {stats['junior_managers_total']}
+
+📈 <b>Faollik ko'rsatkichlari:</b>
+├ 🟢 Online: {stats['online']} ({online_percent}%)
+├ 🔴 Band: {stats['busy']}
+├ 🟡 Tanaffus: {stats['break']}
+└ ⚫ Offline: {stats['offline']}
+
+📋 <b>Vazifalar statistikasi:</b>
+├ 📁 Jami vazifalar: {stats['tasks_today']}
+├ ✅ Bajarilgan: {stats['tasks_completed']}
+├ 📊 Samaradorlik: {efficiency}%
+└ ⏱️ O'rtacha vaqt: {stats['avg_response_time']}
+
+📞 <b>Call center statistikasi:</b>
+├ 📞 Jami qo'ng'iroqlar: {stats['calls_today']}
+├ ⏱️ O'rtacha davomiylik: 4:23
+├ 📈 Konversiya: 67%
+└ ⭐ Mijoz qoniqishi: 92%
+
+⭐ <b>Umumiy reyting:</b> {stats['avg_rating']}
+            """
+        else:
+            text = f"""
+📊 <b>СТАТИСТИКА СОТРУДНИКОВ</b>
+
+👥 <b>Распределение сотрудников:</b>
+├ 👨‍🔧 Техники: {stats['technicians_total']}
+├ 📞 Колл-центр: {stats['call_center_total']}
+└ 👨‍💼 Младшие менеджеры: {stats['junior_managers_total']}
+
+📈 <b>Показатели активности:</b>
+├ 🟢 Онлайн: {stats['online']} ({online_percent}%)
+├ 🔴 Заняты: {stats['busy']}
+├ 🟡 Перерыв: {stats['break']}
+└ ⚫ Оффлайн: {stats['offline']}
+
+📋 <b>Статистика задач:</b>
+├ 📁 Всего задач: {stats['tasks_today']}
+├ ✅ Выполнено: {stats['tasks_completed']}
+├ 📊 Эффективность: {efficiency}%
+└ ⏱️ Среднее время: {stats['avg_response_time']}
+
+📞 <b>Статистика колл-центра:</b>
+├ 📞 Всего звонков: {stats['calls_today']}
+├ ⏱️ Средняя продолжительность: 4:23
+├ 📈 Конверсия: 67%
+└ ⭐ Удовлетворенность клиентов: 92%
+
+⭐ <b>Общий рейтинг:</b> {stats['avg_rating']}
+            """
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📤 Export" if lang == "uz" else "📤 Экспорт",
+                    callback_data="staff:export_stats"
+                ),
+                InlineKeyboardButton(
+                    text="🔄 Yangilash" if lang == "uz" else "🔄 Обновить",
+                    callback_data="staff:refresh_stats"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Orqaga" if lang == "uz" else "⬅️ Назад",
+                    callback_data="staff:back_to_list"
+                )
+            ]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    
+    # Stub functions
+    async def show_all_staff(callback: CallbackQuery, state: FSMContext):
+        await show_technicians(callback, state)  # Show technicians as example
+    
+    async def show_online_staff(callback: CallbackQuery, state: FSMContext):
+        await show_technicians(callback, state)  # Show technicians as example
+    
+    async def show_performance(callback: CallbackQuery, state: FSMContext):
+        await callback.answer("📈 Performance ko'rsatkichlari")
+    
+    async def show_reports(callback: CallbackQuery, state: FSMContext):
+        await callback.answer("📋 Hisobotlar")
+    
+    async def contact_staff(callback: CallbackQuery, state: FSMContext, staff_id: int):
+        await callback.answer(f"📱 Xodim bilan bog'lanish: {staff_id}")
+    
+    async def show_staff_performance(callback: CallbackQuery, state: FSMContext, staff_id: int):
+        await callback.answer(f"📊 Xodim performance: {staff_id}")
+    
+    async def show_staff_tasks(callback: CallbackQuery, state: FSMContext, staff_id: int):
+        await callback.answer(f"📋 Xodim vazifalari: {staff_id}")
+    
+    async def show_staff_stats(callback: CallbackQuery, state: FSMContext, staff_id: int):
+        await callback.answer(f"📈 Xodim statistikasi: {staff_id}")
+    
+    async def add_note(callback: CallbackQuery, state: FSMContext, staff_id: int):
+        await callback.answer(f"📝 Izoh qo'shish: {staff_id}")
+    
+    async def warn_staff(callback: CallbackQuery, state: FSMContext, staff_id: int):
+        await callback.answer(f"⚠️ Ogohlantirish: {staff_id}")
+    
     return router
-
-
-def _create_staff_activity_keyboard():
-    """Create keyboard for staff activity menu (updated)"""
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="📊 Samaradorlik", callback_data="staff_performance"),
-            InlineKeyboardButton(text="📋 Ish yuki", callback_data="staff_workload"),
-        ],
-        [
-            InlineKeyboardButton(text="👤 Xodimlar kesimi", callback_data="staff_user_detail"),
-        ],
-        [
-            InlineKeyboardButton(text="🔙 Orqaga", callback_data="staff_back")
-        ],
-    ])
