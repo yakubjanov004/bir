@@ -10,7 +10,7 @@ def get_manager_main_keyboard(lang: str = "uz") -> ReplyKeyboardMarkup:
         keyboard = [
             [KeyboardButton(text="📥 Inbox"), KeyboardButton(text="📋 Arizalarni ko'rish")],
             [KeyboardButton(text="🔌 Ulanish arizasi yaratish"), KeyboardButton(text="🔧 Texnik xizmat yaratish")],
-            [KeyboardButton(text="🕐 Real vaqtda kuzatish") , KeyboardButton(text="🔍 Filtrlar")],
+            [KeyboardButton(text="🕐 Real vaqtda kuzatish"), KeyboardButton(text="📊 Monitoring")],
             [KeyboardButton(text="👥 Xodimlar faoliyati"), KeyboardButton(text="🔄 Status o'zgartirish")],
             [KeyboardButton(text="📤 Export"), KeyboardButton(text="🌐 Tilni o'zgartirish")],
         ]
@@ -63,9 +63,9 @@ def get_manager_view_applications_keyboard(lang: str = 'uz') -> InlineKeyboardMa
     active_text = "⏳ Faol" if lang == 'uz' else "⏳ Активные"
     completed_text = "✅ Bajarilgan" if lang == 'uz' else "✅ Выполненные"
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=all_text, callback_data="mgr_apps_all")],
-        [InlineKeyboardButton(text=active_text, callback_data="mgr_apps_active")],
-        [InlineKeyboardButton(text=completed_text, callback_data="mgr_apps_completed")],
+        [InlineKeyboardButton(text=all_text, callback_data="mgr_view_all_applications")],
+        [InlineKeyboardButton(text=active_text, callback_data="mgr_view_active_applications")],
+        [InlineKeyboardButton(text=completed_text, callback_data="mgr_view_completed_applications")],
         [InlineKeyboardButton(text="⬅️ Orqaga" if lang=='uz' else "⬅️ Назад", callback_data="back_to_main_menu")],
     ])
 
@@ -162,11 +162,7 @@ def get_inbox_navigation_keyboard(lang: str = 'uz') -> InlineKeyboardMarkup:
     if action_row:
         keyboard.append(action_row)
     
-    # Close button
-    keyboard.append([InlineKeyboardButton(
-        text="❌ Yopish" if lang == 'uz' else "❌ Закрыть",
-        callback_data="mgr_close_inbox"
-    )])
+
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -279,79 +275,83 @@ def get_application_navigation_keyboard(lang: str = 'uz') -> InlineKeyboardMarku
 
 
 def get_manager_realtime_keyboard(lang: str = 'uz') -> InlineKeyboardMarkup:
-    """Create keyboard for manager realtime monitoring with stable callbacks."""
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                text="📋 Arizalar" if lang == 'uz' else "📋 Заявки",
-                callback_data="rm:list:1"
-            ),
-            InlineKeyboardButton(
-                text="🚨 Shoshilinch" if lang == 'uz' else "🚨 Срочные",
-                callback_data="rm:urgent:1"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="👨‍🔧 Texniklar" if lang == 'uz' else "👨‍🔧 Техники",
-                callback_data="rm:techs:1"
-            ),
-            InlineKeyboardButton(
-                text="� Yangilash" if lang == 'uz' else "� Обновить",
-                callback_data="rm:refresh"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="🔙 Orqaga" if lang == 'uz' else "🔙 Назад",
-                callback_data="rm:back"
-            )
-        ]
-    ]
+    """Create keyboard for manager realtime monitoring"""
+    keyboard = []
+    
+    # Main monitoring options
+    main_row = []
+    
+    # Real-time requests button
+    main_row.append(InlineKeyboardButton(
+        text="📋 Zayavkalar" if lang == 'uz' else "📋 Заявки",
+        callback_data="mgr_realtime_requests"
+    ))
+    
+    # Urgent requests button
+    main_row.append(InlineKeyboardButton(
+        text="🚨 Shoshilinch" if lang == 'uz' else "🚨 Срочные",
+        callback_data="mgr_realtime_urgent"
+    ))
+    
+    if main_row:
+        keyboard.append(main_row)
+    
+    # Secondary options
+    secondary_row = []
+    
+    # Time tracking button
+    secondary_row.append(InlineKeyboardButton(
+        text="⏱️ Vaqt kuzatish" if lang == 'uz' else "⏱️ Отслеживание времени",
+        callback_data="mgr_realtime_time"
+    ))
+    
+    # Workflow history button
+    secondary_row.append(InlineKeyboardButton(
+        text="📊 Jarayon tarixi" if lang == 'uz' else "📊 История процесса",
+        callback_data="mgr_realtime_workflow"
+    ))
+    
+    if secondary_row:
+        keyboard.append(secondary_row)
+    
+    # Back button
+    keyboard.append([InlineKeyboardButton(
+        text="🔙 Orqaga" if lang == 'uz' else "🔙 Назад",
+        callback_data="mgr_back_to_main"
+    )])
+    
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_realtime_navigation_keyboard(lang: str, context: str, current_page: int, total_pages: int) -> InlineKeyboardMarkup:
-    """Create a flexible navigation keyboard for realtime monitoring views."""
-    buttons = []
+def get_realtime_navigation_keyboard(lang: str = 'uz') -> InlineKeyboardMarkup:
+    """Create navigation keyboard for realtime monitoring"""
+    keyboard = []
+    
+    # Navigation buttons
     nav_row = []
-
+    
     # Previous button
-    if current_page > 1:
-        nav_row.append(InlineKeyboardButton(
-            text="⬅️ Oldingi" if lang == 'uz' else "⬅️ Предыдущий",
-            callback_data=f"rm:nav:prev:{context}:{current_page}"
-        ))
-    
-    # Page indicator
     nav_row.append(InlineKeyboardButton(
-        text=f"{current_page}/{total_pages}",
-        callback_data="rm:noop"  # No operation
+        text="⬅️ Oldingi" if lang == 'uz' else "⬅️ Предыдущий",
+        callback_data="mgr_realtime_prev"
     ))
-
-    # Next button
-    if current_page < total_pages:
-        nav_row.append(InlineKeyboardButton(
-            text="Keyingi ➡️" if lang == 'uz' else "Следующий ➡️",
-            callback_data=f"rm:nav:next:{context}:{current_page}"
-        ))
     
-    buttons.append(nav_row)
-
-    # Back and Refresh buttons
-    action_row = [
-        InlineKeyboardButton(
-            text="🔙 Orqaga" if lang == 'uz' else "🔙 Назад",
-            callback_data="rm:back"
-        ),
-        InlineKeyboardButton(
-            text="🔄 Yangilash" if lang == 'uz' else "🔄 Обновить",
-            callback_data=f"rm:refresh:{context}:{current_page}"
-        )
-    ]
-    buttons.append(action_row)
-
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    # Next button
+    nav_row.append(InlineKeyboardButton(
+        text="Keyingi ➡️" if lang == 'uz' else "Следующий ➡️",
+        callback_data="mgr_realtime_next"
+    ))
+    
+    if nav_row:
+        keyboard.append(nav_row)
+    
+    # Back button
+    keyboard.append([InlineKeyboardButton(
+        text="🔙 Orqaga" if lang == 'uz' else "🔙 Назад",
+        callback_data="mgr_realtime_back"
+    )])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_realtime_refresh_keyboard(lang: str = 'uz') -> InlineKeyboardMarkup:
@@ -371,3 +371,43 @@ def get_realtime_refresh_keyboard(lang: str = 'uz') -> InlineKeyboardMarkup:
     )])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_manager_realtime_monitoring_keyboard(lang: str = 'uz') -> InlineKeyboardMarkup:
+    """Create realtime monitoring keyboard"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=("📡 Signal monitoring" if lang == 'uz' else "📡 Мониторинг сигнала"), callback_data="mgr_rtm_signal")],
+        [InlineKeyboardButton(text=("🌐 Network monitoring" if lang == 'uz' else "🌐 Мониторинг сети"), callback_data="mgr_rtm_network")],
+        [InlineKeyboardButton(text=("⚡ Performance monitoring" if lang == 'uz' else "⚡ Мониторинг производительности"), callback_data="mgr_rtm_performance")],
+        [InlineKeyboardButton(text=("⬅️ Orqaga" if lang == 'uz' else "⬅️ Назад"), callback_data="back_to_main_menu")]
+    ])
+
+
+def get_manager_monitoring_keyboard(lang: str = 'uz') -> InlineKeyboardMarkup:
+    """Create monitoring keyboard"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=("📊 Umumiy statistika" if lang == 'uz' else "📊 Общая статистика"), callback_data="mgr_mon_general")],
+        [InlineKeyboardButton(text=("📈 Trend analizi" if lang == 'uz' else "📈 Анализ трендов"), callback_data="mgr_mon_trends")],
+        [InlineKeyboardButton(text=("🔍 Detal tahlil" if lang == 'uz' else "🔍 Детальный анализ"), callback_data="mgr_mon_detailed")],
+        [InlineKeyboardButton(text=("⬅️ Orqaga" if lang == 'uz' else "⬅️ Назад"), callback_data="back_to_main_menu")]
+    ])
+
+
+def get_manager_staff_activity_keyboard(lang: str = 'uz') -> InlineKeyboardMarkup:
+    """Create staff activity keyboard"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=("👥 Barcha xodimlar" if lang == 'uz' else "👥 Все сотрудники"), callback_data="mgr_staff_all")],
+        [InlineKeyboardButton(text=("⏰ Faol xodimlar" if lang == 'uz' else "⏰ Активные сотрудники"), callback_data="mgr_staff_active")],
+        [InlineKeyboardButton(text=("📊 Faoliyat statistikasi" if lang == 'uz' else "📊 Статистика активности"), callback_data="mgr_staff_stats")],
+        [InlineKeyboardButton(text=("⬅️ Orqaga" if lang == 'uz' else "⬅️ Назад"), callback_data="back_to_main_menu")]
+    ])
+
+
+def get_manager_export_keyboard(lang: str = 'uz') -> InlineKeyboardMarkup:
+    """Create export keyboard"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=("📊 Excel export" if lang == 'uz' else "📊 Экспорт в Excel"), callback_data="mgr_export_excel")],
+        [InlineKeyboardButton(text=("📄 PDF export" if lang == 'uz' else "📄 Экспорт в PDF"), callback_data="mgr_export_pdf")],
+        [InlineKeyboardButton(text=("📋 Word export" if lang == 'uz' else "📋 Экспорт в Word"), callback_data="mgr_export_word")],
+        [InlineKeyboardButton(text=("⬅️ Orqaga" if lang == 'uz' else "⬅️ Назад"), callback_data="back_to_main_menu")]
+    ])
