@@ -16,6 +16,7 @@ This module provides complete manager functionality including:
 """
 
 
+from .main_menu import get_manager_main_menu_router
 from .language import get_manager_language_router
 from .inbox import get_manager_inbox_router_min
 from .staff_activity import get_manager_staff_activity_router
@@ -36,6 +37,7 @@ def get_manager_router():
     """Get the complete manager router with all handlers"""
     router = Router()
     
+    router.include_router(get_manager_main_menu_router())           # Main menu first
     router.include_router(get_manager_inbox_router_min())            
     router.include_router(get_manager_applications_router())         
     router.include_router(get_manager_connection_order_router())     
