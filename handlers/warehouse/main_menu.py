@@ -8,8 +8,8 @@ from keyboards.warehouse_buttons import (
 from states.warehouse_states import WarehouseMainMenuStates
 from filters.role_filter import RoleFilter
 
-def get_get_warehouse_main_keyboard_router():
-    """Warehouse main menu router"""
+def get_warehouse_main_keyboard_router():
+    """Get the warehouse main menu router"""
     router = Router()
     
     # Apply role filter
